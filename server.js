@@ -4,9 +4,18 @@ const multer = require("multer");
 const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
+const OpenAI = require("openai");
 const path = require("path");
+const { z } = require("zod");
+const { zodResponseFormat } = require("openai/helpers/zod");
+
+const { Paciente, Medico, Informe, HistoriaClinica } = require("./classes.js");
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const baseUrl = "https://api.openai.com/v1";
+const baseServerBackend = "https://rene-app-backend-production.up.railway.app"
 const API_KEY = process.env.OPENAI_API_KEY;
 
 startServer();
@@ -19,10 +28,10 @@ function initializeServer() {
 
   // Configure multer for file uploads
   const storage = multer.diskStorage({
-    destination: function(req, file, cb) {
+    destination: function (req, file, cb) {
       cb(null, "uploads/");
     },
-    filename: function(req, file, cb) {
+    filename: function (req, file, cb) {
       cb(null, Date.now() + path.extname(file.originalname));
     }
   });
@@ -47,7 +56,7 @@ function initializeServer() {
       }
 
       const audioFilePath = req.file.path;
-      
+
       // Create a new FormData instance
       const formData = new FormData();
       formData.append("model", "gpt-4o-mini-transcribe");
@@ -56,7 +65,7 @@ function initializeServer() {
       // Make the request to OpenAI API
       const response = await axios.post(
         `${baseUrl}/audio/transcriptions`,
-        formData, 
+        formData,
         {
           headers: {
             ...formData.getHeaders(),
@@ -65,32 +74,83 @@ function initializeServer() {
         }
       );
 
-      console.log("Transcripción recibida:", response.data);
-      
       // Clean up - delete the file after processing
       fs.unlinkSync(audioFilePath);
-      
+
       // Return the transcription response
       return res.json(response.data);
     } catch (error) {
       console.error("Error en la transcripción:", error.response?.data || error.message);
-      return res.status(500).json({ 
-        error: "Error al procesar la transcripción", 
-        details: error.response?.data || error.message 
+      return res.status(500).json({
+        error: "Error al procesar la transcripción",
+        details: error.response?.data || error.message
       });
     }
   });
 
   // Debe recibir lo procesado de voz a texto (ya masticado)
-  app.post("/procesar", async (req, res) => {
+  app.post("/process", async (req, res) => {
     console.log("Body del req:", req.body);
-    const text = req.body.text || "Por favor, realiza una acción.";
+    const text = req.body.text || "Por favor, realiza una   .";
 
-    responseContent = await getDeepSeekResponse(
+    responseContent = await getLLMResponse(
       getFullPrompt(text)
     );
 
     res.json(responseContent[0].text)
+  });
+
+  // Nuevo endpoint que procesa el archivo: primero lo envía a /audio y luego al endpoint /process
+  app.post("/process-all", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No se proporcionó ningún archivo de audio" });
+      }
+
+      const audioFilePath = req.file.path;
+      const formData = new FormData();
+      formData.append("model", "gpt-4o-mini-transcribe");
+      formData.append("file", fs.createReadStream(audioFilePath));
+
+      // Llamar al endpoint /audio
+      const audioResponse = await axios.post(
+        `${baseServerBackend}/audio`,
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            "Authorization": `Bearer ${API_KEY}`
+          }
+        }
+      );
+
+      console.log("Transcripción recibida:", audioResponse);
+
+
+      // Extraer el texto de la transcripción, asumiendo que viene en audioResponse.data.text
+      const transcriptionText = audioResponse.data.text || audioResponse.data;
+
+      console.log("Texto de la transcripción:\n", transcriptionText);
+
+      // Llamar al endpoint /process con el texto obtenido
+      const processResponse = await axios.post(
+        `${baseServerBackend}/process`,
+        { text: transcriptionText },
+        { headers: { "Content-Type": "application/json" } }
+      );
+
+      console.log("Respuesta del endpoint /process:\n", processResponse.data);
+
+
+      return res.json(processResponse.data);
+
+    } catch (error) {
+      console.error("Error en el endpoint /process-all:", error.response?.data || error.message);
+      return res.status(500).json({
+        error: "Error al procesar el audio",
+        details: error.response?.data || error.message
+      });
+    }
   });
 
   return { app, PORT };
@@ -100,8 +160,7 @@ function startServer() {
   const { app, PORT } = initializeServer();
 
   app.listen(PORT, () => {
-    console.log(`Servidor de transcripción de audio iniciado en http://localhost:${PORT}`);
-    console.log(`Prueba el endpoint de transcripción en: http://localhost:${PORT}/audio`);
+    console.log(`Servidor de transcripción de audio iniciado`);
   });
 }
 
@@ -114,7 +173,7 @@ function determineAction(prompt) {
     lowerPrompt.includes("historia clínica")
   ) {
     return "resumir_historia";
-  } else if (lowerPrompt.includes("receta")){
+  } else if (lowerPrompt.includes("receta")) {
     return "generar_receta";
   } else if (lowerPrompt.includes("informe")) {
     return "anadir_informe_a_historia";
@@ -122,26 +181,37 @@ function determineAction(prompt) {
     return "entender_contexto";
   }
 }
-
-async function getDeepSeekResponse(prompt) {
+async function getLLMResponse(prompt) {
   try {
-    const response = await axios.post(
-      `${baseUrl}/responses`,
-      {
-        model: "gpt-4o-mini", // deepseek/deepseek-r1:free ,,, Modelo de DeepSeek en OpenRouter
-        input: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    console.log(response.data.output[0].content);
 
-    return response.data.output[0].content;
+    const Step = z.object({
+      explanation: z.string(),
+      output: z.string(),
+    });
+
+    const MathReasoning = z.object({
+      steps: z.array(Step),
+      final_answer: z.string(),
+    });
+
+    const response = await openai.beta.chat.completions.parse({
+      model: "gpt-4o-2024-08-06",
+      messages: [
+        { role: "system", content: prompt }
+      ],
+      response_format: zodResponseFormat(Informe, "informe"),
+    });
+
+    const informe = response.choices[0].message
+
+    // If the model refuses to respond, you will get a refusal message
+    if (informe.refusal) {
+      console.log(informe.refusal);
+    } else {
+      console.log(informe.parsed);
+    }
+
+    return response.choices[0].message.content;
 
   } catch (error) {
     console.error(
@@ -153,6 +223,21 @@ async function getDeepSeekResponse(prompt) {
 }
 
 function getFullPrompt(transcribedText) {
+  return `Eres un experto en procesamiento de lenguaje natural especializado en transcripciones médicas. Recibirás un texto transcrito de un audio de un médico en el que se detalla el estado y análisis médico del paciente, abarcando tanto su situación actual como pasada. El texto puede incluir información sobre diagnóstico, seguimiento, solicitudes (estudios, turnos, derivaciones u otro tipo de requerimientos) y/o prescripciones de medicamentos o tratamientos (al menos uno de estos estará presente), entre otras cosas.
 
-  return `Eres un experto en procesamiento de lenguaje natural especializado en transcripciones médicas. Recibirás un texto transcrito a partir de un audio de un médico y debes limpiar y estructurar la información en formato JSON. Sigue estas reglas estrictamente. Elimina muletillas y pausas innecesarias, como 'eee', 'ehh' y otras expresiones vacías. Filtra y elimina comentarios irrelevantes que no formen parte de la historia clínica, como referencias al clima, compras o temas personales del médico. Elimina palabras repetidas que no aporten valor al texto. Corrige errores gramaticales para mejorar la claridad del contenido. No elimines frases médicas, incluso si parecen inconexas; solo límpialas. Devuelve la información en formato JSON, con los siguientes campos:  Nombre: Nombre del paciente,  Apellido: Apellido del paciente,  DNI: Número de DNI,  Diagnostico: Texto limpio y corregido del diagnostico. Asegúrate de mantener el significado original del contenido médico sin agregar ni inventar información. Devuelve solo el JSON como respuesta, sin texto adicional. Este es el texto en cuestion:[${transcribedText}]`
+Tu tarea es:
+1. Identificar y clasificar la información contenida en el texto sin modificar, eliminar o corregir ninguna parte del input. SOLO puedes quitar muletillas y palabras repetidas o cortadas.
+2. Analizar y diseccionar la información para diferenciar claramente entre:
+   - "informe": Información general que refleje el estado del paciente y el análisis médico (incluyendo diagnóstico, seguimiento y antecedentes), así como el análisis o resultados de estudios ya realizados.
+   - "solicitudes": Si el médico solicita la realización de estudios, turnos, derivaciones u otro tipo de requerimientos, extrae esa parte íntegramente y colócala en esta sección, manteniendo la redacción y sintaxis original.
+   - "recetas": Si el médico prescribe medicamentos o tratamientos, extrae esa información y colócala en esta sección, respetando fielmente las palabras y la gramática del médico.
+   - "diagnostico_medico": Extrae la información correspondiente a cualquier diagnóstico mencionado por el médico, ya sea diagnóstico final, preventivo, diferencial o de cualquier otro tipo.
+   - "diagnostico_predictivo": Utilizando todo el texto de input, realiza una predicción del diagnóstico basada en la información proporcionada.
+3. Debes dejar vacíos o nulos aquellos campos del JSON de salida que no se encuentren en el texto.
+
+Fecha de hoy: ${new Date().toISOString().split("T")[0]}
+
+Texto en cuestión: [${transcribedText}]
+
+`
 }
