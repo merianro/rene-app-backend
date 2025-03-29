@@ -6,7 +6,7 @@ const FormData = require("form-data");
 const fs = require("fs");
 const path = require("path");
 
-const baseUrl = "https://rene-app-backend-production.up.railway.app";
+const baseUrl = "https://api.openai.com/v1";
 const API_KEY = process.env.OPENAI_API_KEY;
 
 startServer();
