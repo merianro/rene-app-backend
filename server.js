@@ -188,7 +188,7 @@ function initializeServer() {
     }
   });
 
-  app.update("/validate_history", async (req, res) => {
+  app.post("/validate_history", async (req, res) => {
     const { id, history } = req.body;
     const { data, error } = await supabase
       .from("informe")
