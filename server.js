@@ -1,4 +1,5 @@
 require("dotenv").config();
+const { createClient } = require("@supabase/supabase-js")
 const express = require("express");
 const multer = require("multer");
 const axios = require("axios");
@@ -23,6 +24,25 @@ startServer();
 function initializeServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
+
+  const supabaseUrl = "https://mahbchopvbpcjbcfhjhc.supabase.co";
+  const supabaseKey = process.env.SUPABASE_KEY;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // Check if Supabase connection is successful
+  const checkSupabaseConnection = async () => {
+    try {
+      const { data, error } = await supabase.from('informe').select('count', { count: 'exact' });
+      if (error) throw error;
+      console.log('Successfully connected to Supabase');
+    } catch (error) {
+      console.error('Error connecting to Supabase:', error.message);
+      process.exit(1); // Exit if connection fails
+    }
+  };
+
+  // Initialize connection check
+  checkSupabaseConnection();
 
   app.use(express.json());
 
@@ -128,7 +148,7 @@ function initializeServer() {
       // Extraer el texto de la transcripción, asumiendo que viene en audioResponse.data.text
       const transcriptionText = audioResponse.data.text || audioResponse.data;
 
-      console.log("Texto de la transcripción:\n{'", transcriptionText,"'}");
+      console.log("Texto de la transcripción:\n{'", transcriptionText, "'}");
 
       // Llamar al endpoint /process con el texto obtenido
       const processResponse = await axios.post(
@@ -137,7 +157,27 @@ function initializeServer() {
         { headers: { "Content-Type": "application/json" } }
       );
 
-      return res.json(processResponse.data);
+      const { data, error } = await supabase
+        .from("informe")
+        .insert([{  // Note the array syntax
+          informe: processResponse.data.informe,
+          seguimiento: processResponse.data.seguimiento,
+          fecha: processResponse.data.fecha,
+          receta: processResponse.data.receta,
+          solicitudes: processResponse.data.solicitudes,
+          diagnostico_medico: processResponse.data.diagnostico_medico,
+          diagnostico_predictivo: processResponse.data.diagnostico_predictivo
+        }])
+        .select();  // Add this to get the inserted record back
+      
+      if (error) {
+        console.error("Error al insertar el informe en la base de datos:", error);
+        return res.status(500).json({ error: "Error al procesar el audio" });
+      }
+      else {
+        console.log("Informe insertado con éxito en la base de datos");
+        return res.json(data);
+      }
 
     } catch (error) {
       console.error("Error en el endpoint /process-all:", error.response?.data || error.message);
@@ -147,6 +187,33 @@ function initializeServer() {
       });
     }
   });
+
+  app.update("/validate_history", async (req, res) => {
+    const { id, history } = req.body;
+    const { data, error } = await supabase
+      .from("informe")
+      .update([{  // Note the array syntax
+        informe: history.informe,
+        seguimiento: history.seguimiento,
+        fecha: history.fecha,
+        receta: history.receta,
+        solicitudes: history.solicitudes,
+        diagnostico_medico: history.diagnostico_medico,
+        diagnostico_predictivo: history.diagnostico_predictivo
+      }])
+      .eq("id", id)
+
+    if (error) {
+      console.error("Error al actualizar el informe en la base de datos:", error);
+      return res.status(500).json({ error: "Error al procesar el audio" });
+    }
+    else {
+      console.log("Informe actualizado con éxito en la base de datos");
+      return res.json(data);
+    }
+  });
+
+
 
   return { app, PORT };
 }
