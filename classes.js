@@ -20,7 +20,6 @@ const Medico = z.object({
 });
 
 const Informe = z.object({
-  id: z.number().int(), // SERIAL PRIMARY KEY
   informe: z.string().nullable(), // TEXT NULL
   seguimiento: z.string().nullable(), // TEXT NULL
   fecha: z.string(), // TIMESTAMP DEFAULT CURRENT_TIMESTAMP
