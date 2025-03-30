@@ -90,14 +90,15 @@ function initializeServer() {
 
   // Debe recibir lo procesado de voz a texto (ya masticado)
   app.post("/process", async (req, res) => {
-    console.log("Body del req:", req.body);
     const text = req.body.text || "Por favor, realiza una   .";
 
     responseContent = await getLLMResponse(
       getFullPrompt(text)
     );
 
-    res.json(responseContent[0].text)
+    console.log("Respuesta: ", responseContent);
+
+    res.json(responseContent)
   });
 
   // Nuevo endpoint que procesa el archivo: primero lo envía a /audio y luego al endpoint /process
@@ -124,13 +125,10 @@ function initializeServer() {
         }
       );
 
-      console.log("Transcripción recibida:", audioResponse);
-
-
       // Extraer el texto de la transcripción, asumiendo que viene en audioResponse.data.text
       const transcriptionText = audioResponse.data.text || audioResponse.data;
 
-      console.log("Texto de la transcripción:\n", transcriptionText);
+      console.log("Texto de la transcripción:\n{'", transcriptionText,"'}");
 
       // Llamar al endpoint /process con el texto obtenido
       const processResponse = await axios.post(
@@ -138,9 +136,6 @@ function initializeServer() {
         { text: transcriptionText },
         { headers: { "Content-Type": "application/json" } }
       );
-
-      console.log("Respuesta del endpoint /process:\n", processResponse.data);
-
 
       return res.json(processResponse.data);
 
@@ -207,11 +202,10 @@ async function getLLMResponse(prompt) {
     // If the model refuses to respond, you will get a refusal message
     if (informe.refusal) {
       console.log(informe.refusal);
-    } else {
-      console.log(informe.parsed);
+      return;
     }
 
-    return response.choices[0].message.content;
+    return informe.parsed;
 
   } catch (error) {
     console.error(
@@ -232,8 +226,8 @@ Tu tarea es:
    - "solicitudes": Si el médico solicita la realización de estudios, turnos, derivaciones u otro tipo de requerimientos, extrae esa parte íntegramente y colócala en esta sección, manteniendo la redacción y sintaxis original.
    - "recetas": Si el médico prescribe medicamentos o tratamientos, extrae esa información y colócala en esta sección, respetando fielmente las palabras y la gramática del médico.
    - "diagnostico_medico": Extrae la información correspondiente a cualquier diagnóstico mencionado por el médico, ya sea diagnóstico final, preventivo, diferencial o de cualquier otro tipo.
-   - "diagnostico_predictivo": Utilizando todo el texto de input, realiza una predicción del diagnóstico basada en la información proporcionada.
-3. Debes dejar vacíos o nulos aquellos campos del JSON de salida que no se encuentren en el texto.
+   - "diagnostico_predictivo": Utilizando todo el texto de input, realiza una predicción del diagnóstico basada en la información proporcionada. Quiero que digas 3 posibles enfermedades con una muy breve justificacion del por que.
+3. Dejar como strings vacios en el JSOn aquellos campos que no deban ser cargados.
 
 Fecha de hoy: ${new Date().toISOString().split("T")[0]}
 
