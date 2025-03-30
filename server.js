@@ -189,19 +189,18 @@ function initializeServer() {
   });
 
   app.post("/validate_history", async (req, res) => {
-    const { id, history } = req.body;
     const { data, error } = await supabase
       .from("informe")
       .update([{  // Note the array syntax
-        informe: history.informe,
-        seguimiento: history.seguimiento,
-        fecha: history.fecha,
-        receta: history.receta,
-        solicitudes: history.solicitudes,
-        diagnostico_medico: history.diagnostico_medico,
-        diagnostico_predictivo: history.diagnostico_predictivo
+        informe: req.body[0].informe,
+        seguimiento: req.body[0].seguimiento,
+        fecha: req.body[0].fecha,
+        receta: req.body[0].receta,
+        solicitudes: req.body[0].solicitudes,
+        diagnostico_medico: req.body[0].diagnostico_medico,
+        diagnostico_predictivo: req.body[0].diagnostico_predictivo
       }])
-      .eq("id", id)
+      .eq("id", req.body[0].id)
 
     if (error) {
       console.error("Error al actualizar el informe en la base de datos:", error);
@@ -209,7 +208,7 @@ function initializeServer() {
     }
     else {
       console.log("Informe actualizado con éxito en la base de datos");
-      return res.json(data);
+      return res.status(204).send();
     }
   });
 
