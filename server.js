@@ -1,5 +1,5 @@
 require("dotenv").config();
-const { createClient } = require("@supabase/supabase-js")
+// const { createClient } = require("@supabase/supabase-js")
 const express = require("express");
 const multer = require("multer");
 const axios = require("axios");
@@ -25,24 +25,24 @@ function initializeServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-  const supabaseUrl = "https://mahbchopvbpcjbcfhjhc.supabase.co";
-  const supabaseKey = process.env.SUPABASE_KEY;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // const supabaseUrl = "https://mahbchopvbpcjbcfhjhc.supabase.co";
+  // const supabaseKey = process.env.SUPABASE_KEY;
+  // const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // Check if Supabase connection is successful
-  const checkSupabaseConnection = async () => {
-    try {
-      const { data, error } = await supabase.from('informe').select('count', { count: 'exact' });
-      if (error) throw error;
-      console.log('Successfully connected to Supabase');
-    } catch (error) {
-      console.error('Error connecting to Supabase:', error.message);
-      process.exit(1); // Exit if connection fails
-    }
-  };
+  // // Check if Supabase connection is successful
+  // const checkSupabaseConnection = async () => {
+  //   try {
+  //     const { data, error } = await supabase.from('informe').select('count', { count: 'exact' });
+  //     if (error) throw error;
+  //     console.log('Successfully connected to Supabase');
+  //   } catch (error) {
+  //     console.error('Error connecting to Supabase:', error.message);
+  //     process.exit(1); // Exit if connection fails
+  //   }
+  // };
 
-  // Initialize connection check
-  checkSupabaseConnection();
+  // // Initialize connection check
+  // checkSupabaseConnection();
 
   app.use(express.json());
 
@@ -157,27 +157,8 @@ function initializeServer() {
         { headers: { "Content-Type": "application/json" } }
       );
 
-      const { data, error } = await supabase
-        .from("informe")
-        .insert([{  // Note the array syntax
-          informe: processResponse.data.informe,
-          seguimiento: processResponse.data.seguimiento,
-          fecha: processResponse.data.fecha,
-          receta: processResponse.data.receta,
-          solicitudes: processResponse.data.solicitudes,
-          diagnostico_medico: processResponse.data.diagnostico_medico,
-          diagnostico_predictivo: processResponse.data.diagnostico_predictivo
-        }])
-        .select();  // Add this to get the inserted record back
-      
-      if (error) {
-        console.error("Error al insertar el informe en la base de datos:", error);
-        return res.status(500).json({ error: "Error al procesar el audio" });
-      }
-      else {
-        console.log("Informe insertado con éxito en la base de datos");
-        return res.json(data);
-      }
+      // En su lugar, simplemente devolvemos la respuesta del procesamiento
+      return res.json(processResponse.data);
 
     } catch (error) {
       console.error("Error en el endpoint /process-all:", error.response?.data || error.message);
@@ -189,27 +170,30 @@ function initializeServer() {
   });
 
   app.post("/validate_history", async (req, res) => {
-    const { data, error } = await supabase
-      .from("informe")
-      .update([{  // Note the array syntax
-        informe: req.body[0].informe,
-        seguimiento: req.body[0].seguimiento,
-        fecha: req.body[0].fecha,
-        receta: req.body[0].receta,
-        solicitudes: req.body[0].solicitudes,
-        diagnostico_medico: req.body[0].diagnostico_medico,
-        diagnostico_predictivo: req.body[0].diagnostico_predictivo
-      }])
-      .eq("id", req.body[0].id)
+    // const { data, error } = await supabase
+    //   .from("informe")
+    //   .update([{  // Note the array syntax
+    //     informe: req.body[0].informe,
+    //     seguimiento: req.body[0].seguimiento,
+    //     fecha: req.body[0].fecha,
+    //     receta: req.body[0].receta,
+    //     solicitudes: req.body[0].solicitudes,
+    //     diagnostico_medico: req.body[0].diagnostico_medico,
+    //     diagnostico_predictivo: req.body[0].diagnostico_predictivo
+    //   }])
+    //   .eq("id", req.body[0].id)
 
-    if (error) {
-      console.error("Error al actualizar el informe en la base de datos:", error);
-      return res.status(500).json({ error: "Error al procesar el audio" });
-    }
-    else {
-      console.log("Informe actualizado con éxito en la base de datos");
-      return res.status(204).send();
-    }
+    // if (error) {
+    //   console.error("Error al actualizar el informe en la base de datos:", error);
+    //   return res.status(500).json({ error: "Error al procesar el audio" });
+    // }
+    // else {
+    //   console.log("Informe actualizado con éxito en la base de datos");
+    //   return res.status(204).send();
+    // }
+
+    // Temporalmente, solo devolvemos una respuesta exitosa
+    return res.status(204).send();
   });
 
 
