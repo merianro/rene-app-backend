@@ -16,8 +16,7 @@ const openai = new OpenAI({
 });
 
 const baseUrl = "https://api.openai.com/v1";
-//const baseServerBackend = "https://rene-app-backend-production.up.railway.app"
-const baseServerBackend = "https://rene-app-backend-production-fcf6.up.railway.app"
+const baseServerBackend = "https://rene-app-backend-production.up.railway.app"
 
 const API_KEY = process.env.OPENAI_API_KEY;
 
